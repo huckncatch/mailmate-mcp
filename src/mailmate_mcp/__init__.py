@@ -1,0 +1,1 @@
+"""MailMate MCP server."""

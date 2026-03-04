@@ -1,0 +1,17 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# uv lockfile (not needed for an app others won't install)
+uv.lock
+
+# Claude Code session data
+.claude/
+memory-bank/
