@@ -69,7 +69,8 @@ def _resolve_message(message_url: str) -> tuple[Path, dict]:
 
 @mcp.tool
 def search_messages_tool(
-    query: Annotated[str, "Search query (matched against subject, from, to, cc)"],
+    query: Annotated[str, "Search query (matched against subject, from, to); leave empty to match all"] = "",
+    tag: Annotated[str | None, "Filter to messages with this tag (exact match, case-insensitive)"] = None,
     account: Annotated[
         str | None,
         "Optional account filter (substring match on email address)",
@@ -85,7 +86,10 @@ def search_messages_tool(
     max_results: Annotated[int, "Maximum number of results to return"] = 20,
 ) -> list[dict]:
     """
-    Search MailMate messages by query string.
+    Search MailMate messages by query string and/or tag.
+
+    query and tag are both optional — omit query to list all messages with a given tag,
+    or omit tag to search by text only. Use list_tags to see available tags.
 
     Returns a list of matching messages with subject, from, to, date,
     mailbox, tags, and message_url for each.
@@ -95,6 +99,7 @@ def search_messages_tool(
         search_body=include_body,
         account=account,
         mailbox=mailbox,
+        tag=tag,
         max_results=max_results,
     )
     return [
@@ -128,7 +133,7 @@ def get_message(
     Returns headers, metadata, tags, and optionally the body.
     """
     eml_path, headers = _resolve_message(message_url)
-    summary = summary_from_eml(eml_path)
+    summary = summary_from_eml(eml_path, headers)
 
     result = {
         "message_url": summary.message_url,
@@ -224,7 +229,7 @@ def move_message(
     mailbox across all accounts is used.
     """
     eml_path, headers = _resolve_message(message_url)
-    summary = summary_from_eml(eml_path)
+    summary = summary_from_eml(eml_path, headers)
 
     # Resolve target mailbox directory
     target = Path(target_mailbox_path)
