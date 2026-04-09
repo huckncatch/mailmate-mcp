@@ -11,7 +11,9 @@ MailMate stores messages as standard RFC 2822 .eml files under:
 import email
 import email.header
 import email.policy
+import plistlib
 import re
+import struct
 import threading
 import time
 from dataclasses import dataclass, field
@@ -22,11 +24,103 @@ from urllib.parse import quote, unquote
 MAILMATE_ROOT = (
     Path.home()
     / "Library"
-    / "Application Support"
+    / "ApplicationSupport"
     / "MailMate"
     / "Messages.noindex"
     / "IMAP"
 )
+
+MAILMATE_DB = (
+    Path.home()
+    / "Library"
+    / "ApplicationSupport"
+    / "MailMate"
+    / "Database.noindex"
+    / "Headers"
+)
+
+# ---------------------------------------------------------------------------
+# MailMate binary database helpers (for IMAP keyword/tag data)
+# ---------------------------------------------------------------------------
+
+def _read_mailmate_cache(cache_name: str) -> dict[int, str]:
+    """Parse a MailMate Database.noindex/Headers/*.cache + *.offsets pair.
+
+    Each record in the .offsets file is 12 bytes: three little-endian uint32s
+    (msg_id, start_offset, end_offset_inclusive) indexing into the .cache file.
+    The .cache file is a newline-delimited string store with deduplication —
+    many msg_ids may share the same offset range.
+
+    Returns a dict mapping MailMate internal msg_id → string value.
+    """
+    cache_path = MAILMATE_DB / f"{cache_name}.cache"
+    offsets_path = MAILMATE_DB / f"{cache_name}.offsets"
+    if not cache_path.exists() or not offsets_path.exists():
+        return {}
+    try:
+        cache_data = cache_path.read_bytes()
+        offsets_data = offsets_path.read_bytes()
+    except OSError:
+        return {}
+
+    result: dict[int, str] = {}
+    entry_size = 12  # 3 × uint32_le
+    for i in range(len(offsets_data) // entry_size):
+        off = i * entry_size
+        msg_id, start, end_inc = struct.unpack_from("<III", offsets_data, off)
+        value = cache_data[start : end_inc + 1].rstrip(b"\n").decode("utf-8", errors="replace")
+        result[msg_id] = value
+    return result
+
+
+def _load_tag_keywords() -> set[str]:
+    """Return the IMAP keyword strings for all user-defined MailMate tags.
+
+    Each tag in Tags.plist has a displayName and an optional serverKeyword.
+    When serverKeyword is absent, the IMAP keyword equals the displayName.
+    """
+    tags_plist = Path.home() / "Library" / "ApplicationSupport" / "MailMate" / "Tags.plist"
+    if not tags_plist.exists():
+        return set()
+    try:
+        with tags_plist.open("rb") as f:
+            data = plistlib.load(f)
+        keywords: set[str] = set()
+        for tag in data.get("tags", []):
+            kw = tag.get("serverKeyword") or tag.get("displayName")
+            if kw:
+                keywords.add(kw)
+        return keywords
+    except Exception:
+        return set()
+
+
+def build_message_tag_index() -> dict[str, list[str]]:
+    """Read MailMate's binary header database to map Message-ID → user tags.
+
+    MailMate stores IMAP flags (system flags like \\Seen and user keywords
+    like 'newsletter') in Database.noindex/Headers/#flags.cache, not in
+    the Keywords header of the .eml files. This function decodes that database
+    and returns only the keywords that correspond to user-defined tags
+    (as declared in Tags.plist).
+    """
+    valid_keywords = _load_tag_keywords()
+    if not valid_keywords:
+        return {}
+
+    flags_by_id = _read_mailmate_cache("#flags")
+    msgid_by_id = _read_mailmate_cache("message-id")
+
+    result: dict[str, list[str]] = {}
+    for msg_id, flags_str in flags_by_id.items():
+        message_id = msgid_by_id.get(msg_id)
+        if not message_id:
+            continue
+        tags = [kw for kw in flags_str.split() if kw in valid_keywords]
+        if tags:
+            result[message_id] = tags
+    return result
+
 
 # ---------------------------------------------------------------------------
 # In-memory message-ID → MessageSummary index
@@ -107,6 +201,15 @@ def _build_index() -> None:
         summary = _summary_from_fast_headers(eml_path)
         if summary:
             new_index[summary.message_id] = summary
+
+    # Augment with tag data from MailMate's binary header database.
+    # Tags are stored as IMAP keywords in Database.noindex/Headers/#flags.cache,
+    # not in the Keywords header of .eml files.
+    tag_index = build_message_tag_index()
+    for message_id, tags in tag_index.items():
+        if message_id in new_index:
+            new_index[message_id].tags = tags
+
     with _index_lock:
         _index.update(new_index)
         _last_scan_time = scan_start
