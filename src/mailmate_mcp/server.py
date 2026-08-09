@@ -38,9 +38,9 @@ mcp = FastMCP(
 # ---------------------------------------------------------------------------
 
 
-def _run_applescript(script: str) -> str:
+def _run_applescript(script: str, *args: str) -> str:
     result = subprocess.run(
-        ["osascript", "-e", script],
+        ["osascript", "-e", script, *args],
         capture_output=True,
         text=True,
     )
@@ -183,7 +183,10 @@ def get_message_link(
 
     # Open MailMate at this message
     _run_applescript(
-        f'tell application "MailMate" to open location "{url}"'
+        'on run argv\n'
+        'tell application "MailMate" to open location (item 1 of argv)\n'
+        'end run',
+        url,
     )
     _run_applescript('tell application "MailMate" to activate')
 
@@ -204,7 +207,10 @@ def open_message_in_mailmate(
     Activates MailMate and navigates to the message.
     """
     _run_applescript(
-        f'tell application "MailMate" to open location "{message_url}"'
+        'on run argv\n'
+        'tell application "MailMate" to open location (item 1 of argv)\n'
+        'end run',
+        message_url,
     )
     _run_applescript('tell application "MailMate" to activate')
     return {"opened": message_url}
@@ -299,7 +305,10 @@ def tag_message(
 
     # Open the message first to make it current
     _run_applescript(
-        f'tell application "MailMate" to open location "{url}"'
+        'on run argv\n'
+        'tell application "MailMate" to open location (item 1 of argv)\n'
+        'end run',
+        url,
     )
 
     errors = []
@@ -309,7 +318,10 @@ def tag_message(
     for tag in add_tags:
         try:
             _run_applescript(
-                f'tell application "MailMate" to perform {{"applyTag:", "{tag}"}}'
+                'on run argv\n'
+                'tell application "MailMate" to perform {"applyTag:", item 1 of argv}\n'
+                'end run',
+                tag,
             )
             applied_add.append(tag)
         except RuntimeError as e:
@@ -318,7 +330,10 @@ def tag_message(
     for tag in remove_tags:
         try:
             _run_applescript(
-                f'tell application "MailMate" to perform {{"removeTag:", "{tag}"}}'
+                'on run argv\n'
+                'tell application "MailMate" to perform {"removeTag:", item 1 of argv}\n'
+                'end run',
+                tag,
             )
             applied_remove.append(tag)
         except RuntimeError as e:
