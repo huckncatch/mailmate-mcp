@@ -1,7 +1,6 @@
 """Self-test proving AppleScript values are passed as argv, never interpolated."""
 
 import sys
-import types
 
 
 class FakeCompletedProcess:
