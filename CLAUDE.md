@@ -73,3 +73,13 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ```
 
 After changing server code, restart Claude Desktop to reload.
+
+## Cross-repo documentation (Obsidian)
+
+This project's note is the Home vault note whose `repo` field is this
+repository's path (`repo: ~/Developer/mailmate-mcp`). Find it by searching the vault
+for that line (vault location and rules: `~/config/brain/`). Update it when
+the tool list, the stack, or project status changes.
+
+Decisions, research, and plans worth cross-project visibility go to the vault
+through the `vault` skill (log flow).
