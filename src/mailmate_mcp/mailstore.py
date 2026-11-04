@@ -129,6 +129,9 @@ def build_message_tag_index() -> dict[str, list[str]]:
 # ---------------------------------------------------------------------------
 
 _index: dict[str, "MessageSummary"] = {}   # message_id (with angle brackets) → summary
+# Every .eml file, including copies of one message in several mailboxes
+# (e.g. Gmail Sent Mail + a label). _index keeps only one copy per Message-ID.
+_by_path: dict[Path, "MessageSummary"] = {}
 _index_lock = threading.Lock()
 _index_started = threading.Event()          # prevents double-launch
 _index_ready = threading.Event()            # set when initial scan is complete
@@ -199,22 +202,26 @@ def _summary_from_fast_headers(eml_path: Path) -> "MessageSummary | None":
 def _build_index() -> None:
     global _last_scan_time
     new_index: dict[str, MessageSummary] = {}
+    new_by_path: dict[Path, MessageSummary] = {}
     scan_start = time.time()
     for _, _, eml_path in iter_messages():
         summary = _summary_from_fast_headers(eml_path)
         if summary:
             new_index[summary.message_id] = summary
+            new_by_path[eml_path] = summary
 
     # Augment with tag data from MailMate's binary header database.
     # Tags are stored as IMAP keywords in Database.noindex/Headers/#flags.cache,
     # not in the Keywords header of .eml files.
     tag_index = build_message_tag_index()
-    for message_id, tags in tag_index.items():
-        if message_id in new_index:
-            new_index[message_id].tags = tags
+    for summary in new_by_path.values():
+        tags = tag_index.get(summary.message_id)
+        if tags:
+            summary.tags = tags
 
     with _index_lock:
         _index.update(new_index)
+        _by_path.update(new_by_path)
         _last_scan_time = scan_start
     _index_ready.set()
 
@@ -243,6 +250,7 @@ def _refresh_new_messages() -> None:
                 if summary:
                     with _index_lock:
                         _index[summary.message_id] = summary
+                        _by_path[eml_path] = summary
         except Exception:
             continue
     with _index_lock:
@@ -515,7 +523,7 @@ def search_messages(
     _ensure_index()
     _refresh_new_messages()
     with _index_lock:
-        candidates = list(_index.values())
+        candidates = list(_by_path.values())
 
     filtered = []
     for summary in candidates:
@@ -544,6 +552,8 @@ def search_messages(
     for summary in filtered:
         if len(results) >= max_results:
             break
+        if not summary.path.exists():
+            continue  # moved or deleted since it was indexed
         if query_lower:
             haystack = (
                 summary.subject + " " + summary.from_ + " " + summary.to
