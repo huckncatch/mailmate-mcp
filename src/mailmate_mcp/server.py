@@ -81,18 +81,26 @@ def search_messages_tool(
     ] = None,
     include_body: Annotated[
         bool,
-        "Also search inside message body text (slower)",
+        "Also search inside message body text (slower; narrow with since/before, mailbox, or account)",
     ] = False,
+    since: Annotated[
+        str | None,
+        "Only messages dated on or after this ISO date, e.g. '2026-10-01' (local time)",
+    ] = None,
+    before: Annotated[
+        str | None,
+        "Only messages dated before this ISO date, e.g. '2026-11-01' (local time)",
+    ] = None,
     max_results: Annotated[int, "Maximum number of results to return"] = 20,
 ) -> list[dict]:
     """
-    Search MailMate messages by query string and/or tag.
+    Search MailMate messages by query string, tag, and/or date range.
 
-    query and tag are both optional — omit query to list all messages with a given tag,
-    or omit tag to search by text only. Use list_tags to see available tags.
+    All filters are optional — omit query to list all messages with a given tag
+    or in a date range. Use list_tags to see available tags.
 
-    Returns a list of matching messages with subject, from, to, date,
-    mailbox, tags, and message_url for each.
+    Results are sorted newest first. Returns a list of matching messages with
+    subject, from, to, date, mailbox, tags, and message_url for each.
     """
     results = search_messages(
         query=query,
@@ -100,6 +108,8 @@ def search_messages_tool(
         account=account,
         mailbox=mailbox,
         tag=tag,
+        since=since,
+        before=before,
         max_results=max_results,
     )
     return [

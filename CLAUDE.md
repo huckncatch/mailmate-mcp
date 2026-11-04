@@ -24,7 +24,7 @@ There is no test suite yet. Manual testing is done by registering the server in 
 
 The server has two source files with a strict layering:
 
-**`src/mailmate_mcp/mailstore.py`** — filesystem/parsing layer only. No MCP or AppleScript dependencies. Walks MailMate's on-disk store (`~/Library/Application Support/MailMate/Messages.noindex/IMAP/`), parses `.eml` files using `email.policy.compat32` (tolerates malformed real-world mail), and returns `MessageSummary` dataclasses. All search is a linear scan of `.eml` files.
+**`src/mailmate_mcp/mailstore.py`** — filesystem/parsing layer only. No MCP or AppleScript dependencies. Walks MailMate's on-disk store (`~/Library/Application Support/MailMate/Messages.noindex/IMAP/`), parses `.eml` files using `email.policy.compat32` (tolerates malformed real-world mail), and returns `MessageSummary` dataclasses. Search runs on an in-memory header index (built in a background thread at first use, refreshed with new files on each search): it applies the account, mailbox, tag and date filters, sorts newest first, and only then parses bodies from disk when `search_body` is set.
 
 **`src/mailmate_mcp/server.py`** — MCP boundary. Imports from `mailstore`, defines all tools with `@mcp.tool`, and contains the only AppleScript calls (`osascript`). AppleScript is used for: navigating to messages (`open location`), applying/removing tags (`perform {"applyTag:", tag}`), and activating MailMate.
 

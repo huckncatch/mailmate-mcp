@@ -11,12 +11,14 @@ MailMate stores messages as standard RFC 2822 .eml files under:
 import email
 import email.header
 import email.policy
+import email.utils
 import plistlib
 import re
 import struct
 import threading
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 from urllib.parse import quote, unquote
@@ -188,6 +190,7 @@ def _summary_from_fast_headers(eml_path: Path) -> "MessageSummary | None":
             to=headers["to"],
             date=headers["date"],
             tags=parse_tags(headers["keywords"]),
+            timestamp=parse_date(headers["date"]),
         )
     except Exception:
         return None
@@ -258,6 +261,7 @@ class MessageSummary:
     to: str
     date: str
     tags: list[str] = field(default_factory=list)
+    timestamp: float | None = None  # parsed Date header (Unix time); None if unparseable
 
     @property
     def message_url(self) -> str:
@@ -277,6 +281,35 @@ def decode_header_value(value: str | None) -> str:
         else:
             decoded.append(part)
     return "".join(decoded)
+
+
+def parse_date(date_header: str | None) -> float | None:
+    """Parse an RFC 2822 Date header to Unix time. Returns None if unparseable."""
+    if not date_header:
+        return None
+    try:
+        dt = email.utils.parsedate_to_datetime(date_header)
+    except (TypeError, ValueError, IndexError):
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.timestamp()
+
+
+def parse_date_bound(value: str) -> float:
+    """Parse an ISO date or datetime (e.g. '2026-10-01') to Unix time.
+
+    A value without a time zone is read as local time.
+    """
+    try:
+        dt = datetime.fromisoformat(value.strip())
+    except ValueError:
+        raise ValueError(
+            f"Invalid date {value!r}. Use ISO format, e.g. '2026-10-01'."
+        ) from None
+    if dt.tzinfo is None:
+        dt = dt.astimezone()
+    return dt.timestamp()
 
 
 def parse_tags(keywords_header: str | None) -> list[str]:
@@ -434,7 +467,24 @@ def summary_from_eml(eml_path: Path, headers: dict | None = None) -> MessageSumm
         to=headers["to"],
         date=headers["date"],
         tags=parse_tags(headers["keywords"]),
+        timestamp=parse_date(headers["date"]),
     )
+
+
+def _body_matches(eml_path: Path, query_lower: str) -> bool:
+    """Return True if the Cc header or a text/plain part contains query_lower."""
+    with eml_path.open("rb") as f:
+        msg = email.message_from_binary_file(f, policy=email.policy.compat32)
+    if query_lower in decode_header_value(msg.get("Cc", "")).lower():
+        return True
+    for part in msg.walk():
+        if part.get_content_type() == "text/plain":
+            payload = part.get_payload(decode=True)
+            if payload and query_lower in payload.decode(
+                part.get_content_charset() or "utf-8", errors="replace"
+            ).lower():
+                return True
+    return False
 
 
 def search_messages(
@@ -443,66 +493,70 @@ def search_messages(
     account: str | None = None,
     mailbox: str | None = None,
     tag: str | None = None,
+    since: str | None = None,
+    before: str | None = None,
     max_results: int = 50,
 ) -> list[MessageSummary]:
     """
-    Search messages by query string and/or tag.
+    Search messages by query string, tag, and/or date range, newest first.
 
-    Header search (default) uses the in-memory index — no disk I/O.
-    Body search falls back to a disk scan (explicit opt-in, slower).
-    Returns up to max_results matches.
+    All filters run on the in-memory index. With search_body, only the
+    messages that pass the other filters and miss on subject/from/to are
+    parsed from disk, newest first, until max_results matches are found.
+    since is inclusive and before is exclusive (ISO dates, local time).
+    Messages with an unparseable Date header are excluded by a date filter
+    and sorted last otherwise.
     """
     query_lower = query.lower()
     tag_lower = tag.lower() if tag else None
+    since_ts = parse_date_bound(since) if since else None
+    before_ts = parse_date_bound(before) if before else None
+
+    _ensure_index()
+    _refresh_new_messages()
+    with _index_lock:
+        candidates = list(_index.values())
+
+    filtered = []
+    for summary in candidates:
+        if account and account.lower() not in summary.account.lower():
+            continue
+        if mailbox and mailbox.lower() not in summary.mailbox.lower():
+            continue
+        if tag_lower and not any(tag_lower == t.lower() for t in summary.tags):
+            continue
+        if since_ts is not None or before_ts is not None:
+            ts = summary.timestamp
+            if ts is None:
+                continue
+            if since_ts is not None and ts < since_ts:
+                continue
+            if before_ts is not None and ts >= before_ts:
+                continue
+        filtered.append(summary)
+
+    filtered.sort(
+        key=lambda s: s.timestamp if s.timestamp is not None else float("-inf"),
+        reverse=True,
+    )
+
     results = []
-
-    if not search_body:
-        # Pure in-memory search — iterate the index
-        _ensure_index()
-        with _index_lock:
-            candidates = list(_index.values())
-
-        for summary in candidates:
-            if len(results) >= max_results:
-                break
-            if account and account.lower() not in summary.account.lower():
-                continue
-            if mailbox and mailbox.lower() not in summary.mailbox.lower():
-                continue
-            if tag_lower and not any(tag_lower == t.lower() for t in summary.tags):
-                continue
-            if query_lower:
-                haystack = (
-                    summary.subject + " " + summary.from_ + " " + summary.to
-                ).lower()
-                if query_lower not in haystack:
-                    continue
-            results.append(summary)
-        return results
-
-    # search_body=True: disk scan, check headers then body
-    for acct_name, mb_name, eml_path in iter_messages(account, mailbox):
+    for summary in filtered:
         if len(results) >= max_results:
             break
-        try:
-            with eml_path.open("rb") as f:
-                msg = email.message_from_binary_file(f, policy=email.policy.compat32)
-            haystack = " ".join(
-                decode_header_value(msg.get(h, ""))
-                for h in ("Subject", "From", "To", "Cc")
+        if query_lower:
+            haystack = (
+                summary.subject + " " + summary.from_ + " " + summary.to
             ).lower()
-            for part in msg.walk():
-                if part.get_content_type() == "text/plain":
-                    payload = part.get_payload(decode=True)
-                    if payload:
-                        haystack += " " + payload.decode(
-                            part.get_content_charset() or "utf-8", errors="replace"
-                        ).lower()
-            if query_lower in haystack:
-                results.append(summary_from_eml(eml_path))
-        except Exception:
-            continue
-
+            if query_lower not in haystack:
+                if not search_body:
+                    continue
+                try:
+                    if not _body_matches(summary.path, query_lower):
+                        continue
+                except Exception:
+                    continue
+        results.append(summary)
     return results
 
 

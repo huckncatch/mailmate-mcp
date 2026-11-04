@@ -56,7 +56,7 @@ Restart Claude Desktop after any change to server code or config.
 
 | Tool | Description |
 |------|-------------|
-| `search_messages` | Search by query string, tag, account, or mailbox. Supports body search. |
+| `search_messages` | Search by query string, tag, account, mailbox, or date range (`since` / `before`), newest first. Supports body search. |
 | `get_message` | Fetch full details and body for a message by its `message://` URL. |
 | `list_mailboxes` | List all mailboxes across all configured accounts with message counts. |
 | `list_tags` | List all tags defined in MailMate Preferences → Tags. |
