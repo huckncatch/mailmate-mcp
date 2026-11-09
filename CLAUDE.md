@@ -32,7 +32,7 @@ The server has two source files with a strict layering:
 
 **Message identity**: The primary identifier throughout is the `message://` URL, derived from the `Message-ID` header. Format: `message://%3C<url-encoded-id>%3E` where `<`→`%3C`, `>`→`%3E`, `@` is left unencoded. `url_to_message_id` and `message_id_to_url` in `mailstore.py` handle conversion.
 
-**Adding a new tool**: Define it in `server.py` with `@mcp.tool`. The `fastmcp` decorator uses Python type annotations and the docstring to generate the MCP schema — parameter descriptions in `Annotated[type, "description"]` are part of the schema. Add any needed filesystem logic to `mailstore.py` first, then import it.
+**Adding a new tool**: Define it in `server.py` with `@mcp.tool`. The `fastmcp` decorator uses Python type annotations and the docstring to generate the MCP schema — parameter descriptions in `Annotated[type, "description"]` are part of the schema. Add any needed filesystem logic to `mailstore.py` first, then import it. When you add, rename or remove a tool, update the tools list in the vault note `mailmate-expert-instructions` and paste the note into the Claude Desktop "Mailmate Expert" project. `~/config/brain/drift-checks.d/mailmate-expert.sh` reports a mismatch at the next Claude Code session start.
 
 **Tags**: Stored as RFC 2822 `Keywords` header in `.eml` files. Reading tags is done in `mailstore.py` (`parse_tags`). Writing/removing tags goes through AppleScript in `server.py` because MailMate needs to handle the IMAP sync.
 
@@ -54,6 +54,7 @@ Add to `~/.claude.json` under `"mcpServers"`:
 ```
 
 Or via CLI:
+
 ```bash
 claude mcp add --scope user mailmate /Users/soob/Developer/mailmate-mcp/.venv/bin/mailmate-mcp
 ```
