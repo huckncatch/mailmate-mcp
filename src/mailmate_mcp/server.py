@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 from typing import Annotated
 
@@ -36,28 +35,6 @@ mcp = FastMCP(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-APPLESCRIPT_TIMEOUT = 20  # seconds
-
-
-def _run_applescript(script: str) -> str:
-    try:
-        result = subprocess.run(
-            ["osascript", "-e", script],
-            capture_output=True,
-            text=True,
-            timeout=APPLESCRIPT_TIMEOUT,
-        )
-    except subprocess.TimeoutExpired:
-        raise RuntimeError(
-            f"MailMate did not answer within {APPLESCRIPT_TIMEOUT} seconds. "
-            "Check that MailMate is not blocked by a dialog. "
-            "MailMate may still carry out the command later."
-        )
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip())
-    return result.stdout.strip()
 
 
 def _resolve_message(message_url: str) -> tuple[Path, dict]:
@@ -207,22 +184,6 @@ def get_message_link(
         "message_id": mid,
         "subject": headers["subject"],
     }
-
-
-@mcp.tool
-def open_message_in_mailmate(
-    message_url: Annotated[str, "The message:// URL to open"],
-) -> dict:
-    """
-    Open a specific message in MailMate by its message:// URL.
-
-    Activates MailMate and navigates to the message.
-    """
-    _run_applescript(
-        f'tell application "MailMate" to open location "{message_url}"'
-    )
-    _run_applescript('tell application "MailMate" to activate')
-    return {"opened": message_url}
 
 
 @mcp.tool

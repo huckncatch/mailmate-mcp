@@ -61,7 +61,6 @@ Restart Claude Desktop after any change to server code or config.
 | `list_mailboxes` | List all mailboxes across all configured accounts with message counts. |
 | `list_tags` | List all tags defined in MailMate Preferences → Tags. |
 | `get_message_link` | Get the `message://` link for a message. |
-| `open_message_in_mailmate` | Navigate MailMate to a specific message. |
 | `move_message` | Move a message to a different mailbox (syncs via IMAP). |
 | `tag_message` | Disabled. Returns an error; tag messages in MailMate. |
 
@@ -81,7 +80,7 @@ The server reads MailMate's on-disk message store at:
 
 **`mailstore.py`** — filesystem and parsing layer. Walks the store, parses `.eml` files, and maintains an in-memory index for fast search. No MCP or AppleScript dependencies.
 
-**`server.py`** — MCP boundary. Defines all tools via `fastmcp` and issues AppleScript calls to MailMate only to open a message on request (`open_message_in_mailmate`).
+**`server.py`** — MCP boundary. Defines all tools via `fastmcp`. It never automates MailMate's interface.
 
 ## Development
 
