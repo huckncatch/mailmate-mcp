@@ -60,10 +60,10 @@ Restart Claude Desktop after any change to server code or config.
 | `get_message` | Fetch full details and body for a message by its `message://` URL. |
 | `list_mailboxes` | List all mailboxes across all configured accounts with message counts. |
 | `list_tags` | List all tags defined in MailMate Preferences → Tags. |
-| `get_message_link` | Get the `message://` link for a message and open it in MailMate. |
+| `get_message_link` | Get the `message://` link for a message. |
 | `open_message_in_mailmate` | Navigate MailMate to a specific message. |
 | `move_message` | Move a message to a different mailbox (syncs via IMAP). |
-| `tag_message` | Add or remove tags on a message (syncs as IMAP keywords). |
+| `tag_message` | Disabled. Returns an error; tag messages in MailMate. |
 
 Messages are identified by `message://` URLs derived from the RFC 2822 `Message-ID` header, e.g. `message://%3Cabc123@example.com%3E`. Use `search_messages` to find them.
 
@@ -81,7 +81,7 @@ The server reads MailMate's on-disk message store at:
 
 **`mailstore.py`** — filesystem and parsing layer. Walks the store, parses `.eml` files, and maintains an in-memory index for fast search. No MCP or AppleScript dependencies.
 
-**`server.py`** — MCP boundary. Defines all tools via `fastmcp` and issues AppleScript calls to MailMate for actions that require IMAP sync (open, tag, activate).
+**`server.py`** — MCP boundary. Defines all tools via `fastmcp` and issues AppleScript calls to MailMate only to open a message on request (`open_message_in_mailmate`).
 
 ## Development
 

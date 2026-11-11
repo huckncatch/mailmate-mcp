@@ -188,11 +188,11 @@ def list_mailboxes() -> list[dict]:
 def get_message_link(
     message_url: Annotated[
         str,
-        "The message:// URL to open in MailMate",
+        "The message:// URL of the message",
     ],
 ) -> dict:
     """
-    Get the message:// link for a message and open it in MailMate.
+    Get the message:// link for a message. Does not open MailMate.
 
     The returned URL can be pasted into any app to jump directly
     to the message in MailMate (same as Edit > Copy as Link).
@@ -201,12 +201,6 @@ def get_message_link(
     eml_path, headers = _resolve_message(message_url)
     mid = headers["message_id"]
     url = message_id_to_url(mid)
-
-    # Open MailMate at this message
-    _run_applescript(
-        f'tell application "MailMate" to open location "{url}"'
-    )
-    _run_applescript('tell application "MailMate" to activate')
 
     return {
         "message_url": url,
@@ -301,57 +295,15 @@ def tag_message(
     remove_tags: Annotated[list[str], "Tags to remove"] = [],
 ) -> dict:
     """
-    Add or remove tags on a message.
+    Add or remove tags on a message. Disabled: it always raises an error.
 
-    Tags are stored as IMAP Keywords headers and synced to the server.
-    MailMate will pick up the change on next access.
-
-    Use list_tags to see what tags are defined in MailMate.
+    Ask the user to tag the message in MailMate instead.
     """
-    if not add_tags and not remove_tags:
-        raise ValueError("Provide at least one tag to add or remove.")
-
-    eml_path, headers = _resolve_message(message_url)
-
-    # Use AppleScript perform to apply tags — this is the safe way
-    # that lets MailMate handle the IMAP sync properly.
-    message_id = headers["message_id"]
-    url = message_id_to_url(message_id)
-
-    # Open the message first to make it current
-    _run_applescript(
-        f'tell application "MailMate" to open location "{url}"'
+    raise RuntimeError(
+        "tag_message is disabled. The AppleScript path opened MailMate "
+        "windows and froze the Mac. Ask the user to tag the message in "
+        "MailMate; a server-side (JMAP) replacement is in progress."
     )
-
-    errors = []
-    applied_add = []
-    applied_remove = []
-
-    for tag in add_tags:
-        try:
-            _run_applescript(
-                f'tell application "MailMate" to perform {{"applyTag:", "{tag}"}}'
-            )
-            applied_add.append(tag)
-        except RuntimeError as e:
-            errors.append(f"add {tag!r}: {e}")
-
-    for tag in remove_tags:
-        try:
-            _run_applescript(
-                f'tell application "MailMate" to perform {{"removeTag:", "{tag}"}}'
-            )
-            applied_remove.append(tag)
-        except RuntimeError as e:
-            errors.append(f"remove {tag!r}: {e}")
-
-    return {
-        "message_url": url,
-        "subject": headers["subject"],
-        "tags_added": applied_add,
-        "tags_removed": applied_remove,
-        "errors": errors,
-    }
 
 
 @mcp.tool
