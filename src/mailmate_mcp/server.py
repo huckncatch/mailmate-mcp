@@ -38,12 +38,23 @@ mcp = FastMCP(
 # ---------------------------------------------------------------------------
 
 
+APPLESCRIPT_TIMEOUT = 20  # seconds
+
+
 def _run_applescript(script: str) -> str:
-    result = subprocess.run(
-        ["osascript", "-e", script],
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=APPLESCRIPT_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(
+            f"MailMate did not answer within {APPLESCRIPT_TIMEOUT} seconds. "
+            "Check that MailMate is not blocked by a dialog. "
+            "MailMate may still carry out the command later."
+        )
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip())
     return result.stdout.strip()

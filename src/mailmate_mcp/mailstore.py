@@ -464,6 +464,11 @@ def summary_from_eml(eml_path: Path, headers: dict | None = None) -> MessageSumm
     if headers is None:
         headers = parse_eml(eml_path)
     account, mailbox = _account_mailbox_from_path(eml_path)
+    tag_index = build_message_tag_index()
+    if tag_index:
+        tags = tag_index.get(headers["message_id"], [])
+    else:
+        tags = parse_tags(headers["keywords"])
     return MessageSummary(
         path=eml_path,
         uid=eml_path.stem,
@@ -474,7 +479,7 @@ def summary_from_eml(eml_path: Path, headers: dict | None = None) -> MessageSumm
         from_=headers["from"],
         to=headers["to"],
         date=headers["date"],
-        tags=parse_tags(headers["keywords"]),
+        tags=tags,
         timestamp=parse_date(headers["date"]),
     )
 
@@ -522,8 +527,13 @@ def search_messages(
 
     _ensure_index()
     _refresh_new_messages()
+    # Tags change after the index is built, so read them fresh each search.
+    tag_index = build_message_tag_index()
     with _index_lock:
         candidates = list(_by_path.values())
+    if tag_index:
+        for summary in candidates:
+            summary.tags = tag_index.get(summary.message_id, [])
 
     filtered = []
     for summary in candidates:
