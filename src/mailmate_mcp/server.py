@@ -63,7 +63,7 @@ def search_messages_tool(
     tag: Annotated[str | None, "Filter to messages with this tag (exact match, case-insensitive)"] = None,
     account: Annotated[
         str | None,
-        "Optional account filter (substring match on email address)",
+        "Optional account filter (substring match on email address, e.g. 'name@fastmail.com', or on the account name from list_mailboxes)",
     ] = None,
     mailbox: Annotated[
         str | None,

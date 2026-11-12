@@ -358,6 +358,27 @@ def iter_accounts() -> Iterator[Path]:
             yield p
 
 
+def account_matches(account_filter: str, account_name: str) -> bool:
+    """
+    Match an account filter against an account directory name.
+
+    MailMate names account directories <login>@<imap-host>, with any "@" in
+    the login URL-encoded: "huckncatch%40fastmail.com@imap.fastmail.com",
+    "huckncatch@imap.gmail.com". The filter is a case-insensitive substring
+    of the raw name, the decoded name, or the email address
+    ("huckncatch@fastmail.com", "huckncatch@gmail.com").
+    """
+    decoded = unquote(account_name)
+    login, _, host = decoded.rpartition("@")
+    if "@" in login:
+        address = login
+    else:
+        domain = host[len("imap."):] if host.startswith("imap.") else host
+        address = f"{login}@{domain}"
+    needle = account_filter.lower()
+    return any(needle in s.lower() for s in (account_name, decoded, address))
+
+
 def _mailbox_name(mailbox_dir: Path) -> str:
     """Convert a .mailbox path to a human-readable mailbox name."""
     # Strip account prefix and .mailbox suffixes, join with /
@@ -388,7 +409,7 @@ def iter_messages(
     """
     for account_dir in iter_accounts():
         acct_name = account_dir.name
-        if account and account.lower() not in acct_name.lower():
+        if account and not account_matches(account, acct_name):
             continue
         for mb_name, messages_dir in iter_mailboxes(account_dir):
             if mailbox and mailbox.lower() not in mb_name.lower():
@@ -543,7 +564,7 @@ def search_messages(
 
     filtered = []
     for summary in candidates:
-        if account and account.lower() not in summary.account.lower():
+        if account and not account_matches(account, summary.account):
             continue
         if mailbox and mailbox.lower() not in summary.mailbox.lower():
             continue
