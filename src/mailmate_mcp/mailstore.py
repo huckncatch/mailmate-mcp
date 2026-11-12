@@ -363,10 +363,10 @@ def account_matches(account_filter: str, account_name: str) -> bool:
     Match an account filter against an account directory name.
 
     MailMate names account directories <login>@<imap-host>, with any "@" in
-    the login URL-encoded: "huckncatch%40fastmail.com@imap.fastmail.com",
-    "huckncatch@imap.gmail.com". The filter is a case-insensitive substring
+    the login URL-encoded: "name%40fastmail.com@imap.fastmail.com",
+    "name@imap.gmail.com". The filter is a case-insensitive substring
     of the raw name, the decoded name, or the email address
-    ("huckncatch@fastmail.com", "huckncatch@gmail.com").
+    ("name@fastmail.com", "name@gmail.com").
     """
     decoded = unquote(account_name)
     login, _, host = decoded.rpartition("@")
