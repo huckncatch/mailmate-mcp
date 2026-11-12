@@ -65,7 +65,7 @@ In `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-The package is an editable install, so a restart of the client (or `/mcp` reconnect in Claude Code) loads code changes.
+The package is an editable install, but each server process keeps the code it loaded at start. `claude mcp remove`/`add` and restarting Claude Desktop do not restart a running Claude Code session's server: that session keeps calling the old code until it reconnects `mailmate` or a new session starts. Check with `ps -axo pid,lstart,command | grep '[m]ailmate-mcp'`. To test the registered path without a client, send MCP JSON-RPC (`initialize`, then `tools/call`) to the launcher over stdio.
 
 ## Cross-repo documentation (Obsidian)
 
