@@ -75,26 +75,32 @@ def _read_mailmate_cache(cache_name: str) -> dict[int, str]:
     return result
 
 
-def _load_tag_keywords() -> set[str]:
-    """Return the IMAP keyword strings for all user-defined MailMate tags.
+def tag_keywords() -> dict[str, str]:
+    """Return {displayName: IMAP keyword} for all user-defined MailMate tags.
 
     Each tag in Tags.plist has a displayName and an optional serverKeyword.
     When serverKeyword is absent, the IMAP keyword equals the displayName.
     """
     tags_plist = Path.home() / "Library" / "ApplicationSupport" / "MailMate" / "Tags.plist"
     if not tags_plist.exists():
-        return set()
+        return {}
     try:
         with tags_plist.open("rb") as f:
             data = plistlib.load(f)
-        keywords: set[str] = set()
+        result: dict[str, str] = {}
         for tag in data.get("tags", []):
-            kw = tag.get("serverKeyword") or tag.get("displayName")
-            if kw:
-                keywords.add(kw)
-        return keywords
+            name = tag.get("displayName")
+            kw = tag.get("serverKeyword") or name
+            if name and kw:
+                result[name] = kw
+        return result
     except Exception:
-        return set()
+        return {}
+
+
+def _load_tag_keywords() -> set[str]:
+    """Return the IMAP keyword strings for all user-defined MailMate tags."""
+    return set(tag_keywords().values())
 
 
 def build_message_tag_index() -> dict[str, list[str]]:

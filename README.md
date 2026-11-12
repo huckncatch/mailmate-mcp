@@ -19,21 +19,12 @@ uv sync
 
 ## MCP Registration
 
+`tag_message` needs a Fastmail API token (JMAP type, Email scope) in `FASTMAIL_API_TOKEN`. Register a launcher script that sets it and then runs `/path/to/mailmate-mcp/.venv/bin/mailmate-mcp`, so no client config holds the token. The other tools work without it.
+
 ### Claude Code (global, all projects)
 
 ```bash
-claude mcp add --scope user mailmate /path/to/mailmate-mcp/.venv/bin/mailmate-mcp
-```
-
-Or add manually to `~/.claude.json` under `"mcpServers"`:
-
-```json
-"mailmate": {
-  "type": "stdio",
-  "command": "/path/to/mailmate-mcp/.venv/bin/mailmate-mcp",
-  "args": [],
-  "env": {}
-}
+claude mcp add --scope user mailmate /path/to/launcher.sh
 ```
 
 ### Claude Desktop
@@ -44,7 +35,8 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 {
   "mcpServers": {
     "mailmate": {
-      "command": "/path/to/mailmate-mcp/.venv/bin/mailmate-mcp"
+      "command": "/path/to/launcher.sh",
+      "args": []
     }
   }
 }
@@ -62,7 +54,7 @@ Restart Claude Desktop after any change to server code or config.
 | `list_tags` | List all tags defined in MailMate Preferences → Tags. |
 | `get_message_link` | Get the `message://` link for a message. |
 | `move_message` | Move a message to a different mailbox (syncs via IMAP). |
-| `tag_message` | Disabled. Returns an error; tag messages in MailMate. |
+| `tag_message` | Add or remove tags on a Fastmail message. Sets the IMAP keywords on the server over JMAP; MailMate shows them after its next sync. |
 
 Messages are identified by `message://` URLs derived from the RFC 2822 `Message-ID` header, e.g. `message://%3Cabc123@example.com%3E`. Use `search_messages` to find them.
 

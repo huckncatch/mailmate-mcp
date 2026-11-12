@@ -16,8 +16,10 @@ from .mailstore import (
     parse_eml,
     search_messages,
     summary_from_eml,
+    tag_keywords,
     url_to_message_id,
 )
+from .jmap import update_keywords
 
 mcp = FastMCP(
     "mailmate",
@@ -251,20 +253,55 @@ def tag_message(
     message_url: Annotated[str, "The message:// URL of the message to tag"],
     add_tags: Annotated[
         list[str],
-        "Tags to add (MailMate will sync as IMAP keywords)",
+        "Tags to add (display names from list_tags)",
     ] = [],
-    remove_tags: Annotated[list[str], "Tags to remove"] = [],
+    remove_tags: Annotated[list[str], "Tags to remove (display names from list_tags)"] = [],
 ) -> dict:
     """
-    Add or remove tags on a message. Disabled: it always raises an error.
+    Add or remove tags on one Fastmail message.
 
-    Ask the user to tag the message in MailMate instead.
+    Sets the tags' IMAP keywords on the Fastmail server over JMAP. MailMate
+    shows the change after its next sync. Does not open MailMate. Messages
+    in other accounts cannot be tagged; move them to Fastmail first.
     """
-    raise RuntimeError(
-        "tag_message is disabled. The AppleScript path opened MailMate "
-        "windows and froze the Mac. Ask the user to tag the message in "
-        "MailMate; a server-side (JMAP) replacement is in progress."
+    if not add_tags and not remove_tags:
+        raise ValueError("Provide at least one tag to add or remove.")
+
+    eml_path, headers = _resolve_message(message_url)
+    summary = summary_from_eml(eml_path, headers)
+    if "imap.fastmail.com" not in summary.account:
+        raise ValueError(
+            f"Only Fastmail messages can be tagged; this one is in "
+            f"{summary.account}. Move it to Fastmail first."
+        )
+
+    # Display name (any case) -> (display name, IMAP keyword)
+    defined = {name.lower(): (name, kw) for name, kw in tag_keywords().items()}
+    unknown = [t for t in add_tags + remove_tags if t.lower() not in defined]
+    if unknown:
+        raise ValueError(f"Unknown tags {unknown}. Use list_tags to see defined tags.")
+    overlap = {t.lower() for t in add_tags} & {t.lower() for t in remove_tags}
+    if overlap:
+        raise ValueError(f"Tags in both add_tags and remove_tags: {sorted(overlap)}")
+
+    before, after = update_keywords(
+        headers["message_id"],
+        add=[defined[t.lower()][1] for t in add_tags],
+        remove=[defined[t.lower()][1] for t in remove_tags],
     )
+
+    # Keyword (lowercase) -> display name; Fastmail-only keywords are dropped
+    by_keyword = {kw.lower(): name for name, kw in defined.values()}
+
+    def as_tags(keywords: list[str]) -> list[str]:
+        return [by_keyword[k] for k in keywords if k in by_keyword]
+
+    return {
+        "message_url": summary.message_url,
+        "subject": summary.subject,
+        "tags_before": as_tags(before),
+        "tags_after": as_tags(after),
+    }
 
 
 @mcp.tool
