@@ -19,7 +19,7 @@ from .mailstore import (
     tag_keywords,
     url_to_message_id,
 )
-from .jmap import update_keywords
+from .jmap import MAX_MESSAGES, update_keywords
 
 mcp = FastMCP(
     "mailmate",
@@ -250,7 +250,10 @@ def move_message(
 
 @mcp.tool
 def tag_message(
-    message_url: Annotated[str, "The message:// URL of the message to tag"],
+    message_urls: Annotated[
+        list[str],
+        f"The message:// URLs of the messages to tag (1 to {MAX_MESSAGES}); pass all of them in one call",
+    ],
     add_tags: Annotated[
         list[str],
         "Tags to add (display names from list_tags)",
@@ -258,22 +261,19 @@ def tag_message(
     remove_tags: Annotated[list[str], "Tags to remove (display names from list_tags)"] = [],
 ) -> dict:
     """
-    Add or remove tags on one Fastmail message.
+    Add or remove the same tags on one or more Fastmail messages.
 
     Sets the tags' IMAP keywords on the Fastmail server over JMAP. MailMate
     shows the change after its next sync. Does not open MailMate. Messages
     in other accounts cannot be tagged; move them to Fastmail first.
+    Returns "tagged" (tags before and after for each message) and "failed"
+    (each message that was not changed, with the reason).
     """
     if not add_tags and not remove_tags:
         raise ValueError("Provide at least one tag to add or remove.")
-
-    eml_path, headers = _resolve_message(message_url)
-    summary = summary_from_eml(eml_path, headers)
-    if "imap.fastmail.com" not in summary.account:
-        raise ValueError(
-            f"Only Fastmail messages can be tagged; this one is in "
-            f"{summary.account}. Move it to Fastmail first."
-        )
+    urls = list(dict.fromkeys(message_urls))  # drop duplicates, keep order
+    if not urls or len(urls) > MAX_MESSAGES:
+        raise ValueError(f"Provide 1 to {MAX_MESSAGES} message URLs; got {len(urls)}.")
 
     # Display name (any case) -> (display name, IMAP keyword)
     defined = {name.lower(): (name, kw) for name, kw in tag_keywords().items()}
@@ -284,11 +284,28 @@ def tag_message(
     if overlap:
         raise ValueError(f"Tags in both add_tags and remove_tags: {sorted(overlap)}")
 
-    before, after = update_keywords(
-        headers["message_id"],
+    failed: list[dict] = []
+    subjects: dict[str, tuple[str, str]] = {}  # Message-ID -> (URL, subject)
+    for url in urls:
+        try:
+            eml_path, headers = _resolve_message(url)
+        except (FileNotFoundError, ValueError) as e:
+            failed.append({"message_url": url, "error": str(e)})
+            continue
+        summary = summary_from_eml(eml_path, headers)
+        if "imap.fastmail.com" not in summary.account:
+            failed.append({
+                "message_url": url,
+                "error": f"Only Fastmail messages can be tagged; this one is in {summary.account}. Move it to Fastmail first.",
+            })
+            continue
+        subjects[headers["message_id"].strip().strip("<>")] = (summary.message_url, summary.subject)
+
+    results = update_keywords(
+        list(subjects),
         add=[defined[t.lower()][1] for t in add_tags],
         remove=[defined[t.lower()][1] for t in remove_tags],
-    )
+    ) if subjects else {}
 
     # Keyword (lowercase) -> display name; Fastmail-only keywords are dropped
     by_keyword = {kw.lower(): name for name, kw in defined.values()}
@@ -296,12 +313,19 @@ def tag_message(
     def as_tags(keywords: list[str]) -> list[str]:
         return [by_keyword[k] for k in keywords if k in by_keyword]
 
-    return {
-        "message_url": summary.message_url,
-        "subject": summary.subject,
-        "tags_before": as_tags(before),
-        "tags_after": as_tags(after),
-    }
+    tagged: list[dict] = []
+    for mid, (url, subject) in subjects.items():
+        result = results[mid]
+        if "error" in result:
+            failed.append({"message_url": url, "subject": subject, "error": result["error"]})
+        else:
+            tagged.append({
+                "message_url": url,
+                "subject": subject,
+                "tags_before": as_tags(result["before"]),
+                "tags_after": as_tags(result["after"]),
+            })
+    return {"tagged": tagged, "failed": failed}
 
 
 @mcp.tool
