@@ -197,6 +197,7 @@ def _summary_from_fast_headers(eml_path: Path) -> "MessageSummary | None":
             subject=headers["subject"],
             from_=headers["from"],
             to=headers["to"],
+            cc=headers["cc"],
             date=headers["date"],
             tags=parse_tags(headers["keywords"]),
             timestamp=parse_date(headers["date"]),
@@ -273,6 +274,7 @@ class MessageSummary:
     subject: str
     from_: str
     to: str
+    cc: str
     date: str
     tags: list[str] = field(default_factory=list)
     timestamp: float | None = None  # parsed Date header (Unix time); None if unparseable
@@ -505,6 +507,7 @@ def summary_from_eml(eml_path: Path, headers: dict | None = None) -> MessageSumm
         subject=headers["subject"],
         from_=headers["from"],
         to=headers["to"],
+        cc=headers["cc"],
         date=headers["date"],
         tags=tags,
         timestamp=parse_date(headers["date"]),
@@ -512,11 +515,9 @@ def summary_from_eml(eml_path: Path, headers: dict | None = None) -> MessageSumm
 
 
 def _body_matches(eml_path: Path, query_lower: str) -> bool:
-    """Return True if the Cc header or a text/plain part contains query_lower."""
+    """Return True if a text/plain part contains query_lower."""
     with eml_path.open("rb") as f:
         msg = email.message_from_binary_file(f, policy=email.policy.compat32)
-    if query_lower in decode_header_value(msg.get("Cc", "")).lower():
-        return True
     for part in msg.walk():
         if part.get_content_type() == "text/plain":
             payload = part.get_payload(decode=True)
@@ -541,7 +542,7 @@ def search_messages(
     Search messages by query string, tag, and/or date range, newest first.
 
     All filters run on the in-memory index. With search_body, only the
-    messages that pass the other filters and miss on subject/from/to are
+    messages that pass the other filters and miss on subject/from/to/cc are
     parsed from disk, newest first, until max_results matches are found.
     since is inclusive and before is exclusive (ISO dates, local time).
     Messages with an unparseable Date header are excluded by a date filter
@@ -594,6 +595,7 @@ def search_messages(
         if query_lower:
             haystack = (
                 summary.subject + " " + summary.from_ + " " + summary.to
+                + " " + summary.cc
             ).lower()
             if query_lower not in haystack:
                 if not search_body:

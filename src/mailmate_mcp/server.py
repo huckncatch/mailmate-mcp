@@ -59,7 +59,7 @@ def _resolve_message(message_url: str) -> tuple[Path, dict]:
 
 @mcp.tool
 def search_messages_tool(
-    query: Annotated[str, "Search query (matched against subject, from, to); leave empty to match all"] = "",
+    query: Annotated[str, "Search query (matched against subject, from, to, cc); leave empty to match all"] = "",
     tag: Annotated[str | None, "Filter to messages with this tag (exact match, case-insensitive)"] = None,
     account: Annotated[
         str | None,
@@ -90,7 +90,7 @@ def search_messages_tool(
     or in a date range. Use list_tags to see available tags.
 
     Results are sorted newest first. Returns a list of matching messages with
-    subject, from, to, date, mailbox, tags, and message_url for each.
+    subject, from, to, cc, date, mailbox, tags, and message_url for each.
     """
     results = search_messages(
         query=query,
@@ -108,6 +108,7 @@ def search_messages_tool(
             "subject": m.subject,
             "from": m.from_,
             "to": m.to,
+            "cc": m.cc,
             "date": m.date,
             "account": m.account,
             "mailbox": m.mailbox,
@@ -141,6 +142,7 @@ def get_message(
         "subject": summary.subject,
         "from": summary.from_,
         "to": summary.to,
+        "cc": summary.cc,
         "date": summary.date,
         "account": summary.account,
         "mailbox": summary.mailbox,
