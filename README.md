@@ -53,7 +53,7 @@ Restart Claude Desktop after any change to server code or config.
 | `list_mailboxes` | List all mailboxes across all configured accounts with message counts. |
 | `list_tags` | List all tags defined in MailMate Preferences → Tags. |
 | `get_message_link` | Get the `message://` link for a message. |
-| `move_message` | Move a message to a different mailbox (syncs via IMAP). |
+| `move_message` | Disabled. Changes nothing and returns an error naming the message to move by hand in MailMate: the server has no way to send an IMAP MOVE. |
 | `tag_message` | Add or remove tags on a Fastmail message. Sets the IMAP keywords on the server over JMAP; MailMate shows them after its next sync. |
 
 Messages are identified by `message://` URLs derived from the RFC 2822 `Message-ID` header, e.g. `message://%3Cabc123@example.com%3E`. Use `search_messages` to find them.

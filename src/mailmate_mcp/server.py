@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
 
 from .mailstore import (
     MAILMATE_ROOT,
@@ -28,8 +29,9 @@ mcp = FastMCP(
         "Messages are identified by message:// URLs (e.g. "
         "message://%3CfTJUwhWlRX2F6Fi4B07W0g@geopod-ismtpd-52%3E). "
         "Use search_messages to find emails, get_message to read them, "
-        "move_message and tag_message to organize, and get_message_link "
-        "to obtain shareable message:// URLs."
+        "tag_message to organize, and get_message_link to obtain shareable "
+        "message:// URLs. move_message is disabled: it changes nothing and "
+        "names the message to move by hand in MailMate."
     ),
 )
 
@@ -201,53 +203,25 @@ def move_message(
     ],
 ) -> dict:
     """
-    Move a message to a different mailbox.
+    Not available: this server cannot move messages.
 
-    MailMate performs the actual IMAP MOVE, so the message will be
-    moved on the server as well.  Provide the 'path' from list_mailboxes
-    or just a mailbox name — if a name is given, the first matching
-    mailbox across all accounts is used.
+    Always fails without changing anything, and says which message and
+    mailbox to move by hand in MailMate. MailMate's on-disk store is a
+    cache: renaming an .eml file there sends no IMAP MOVE to the server and
+    leaves MailMate's database out of step with the files. MailMate offers
+    no scriptable move either (its AppleScript acts only on the selection
+    shown on screen). Move messages in MailMate itself.
     """
     eml_path, headers = _resolve_message(message_url)
     summary = summary_from_eml(eml_path, headers)
-
-    # Resolve target mailbox directory
-    target = Path(target_mailbox_path)
-    if not target.exists():
-        # Try to find by name
-        all_mbs = list_mailboxes_all()
-        matches = [
-            m
-            for m in all_mbs
-            if target_mailbox_path.lower() in m["mailbox"].lower()
-            or target_mailbox_path.lower() in m["path"].lower()
-        ]
-        if not matches:
-            raise ValueError(
-                f"No mailbox found matching {target_mailbox_path!r}. "
-                "Use list_mailboxes to see available mailboxes."
-            )
-        target = Path(matches[0]["path"])
-
-    target_messages = target / "Messages"
-    if not target_messages.exists():
-        raise ValueError(f"Target mailbox has no Messages directory: {target}")
-
-    # Move the .eml file
-    dest = target_messages / eml_path.name
-    eml_path.rename(dest)
-
-    return {
-        "moved": True,
-        "message_url": summary.message_url,
-        "subject": summary.subject,
-        "from_mailbox": summary.mailbox,
-        "to_mailbox": str(target),
-        "note": (
-            "The file has been moved on disk. "
-            "MailMate will sync the IMAP MOVE on next sync."
-        ),
-    }
+    raise ToolError(
+        "move_message is disabled: this server cannot move messages on the "
+        "IMAP server, and renaming files in MailMate's cache would desync it. "
+        f"Nothing was changed. Move it in MailMate instead: "
+        f"{summary.subject!r} from {summary.from_!r}, "
+        f"in {summary.account} / {summary.mailbox}, "
+        f"to {target_mailbox_path!r}."
+    )
 
 
 @mcp.tool
