@@ -26,7 +26,7 @@ from urllib.parse import quote, unquote
 MAILMATE_ROOT = (
     Path.home()
     / "Library"
-    / "ApplicationSupport"
+    / "Application Support"
     / "MailMate"
     / "Messages.noindex"
     / "IMAP"
@@ -35,7 +35,7 @@ MAILMATE_ROOT = (
 MAILMATE_DB = (
     Path.home()
     / "Library"
-    / "ApplicationSupport"
+    / "Application Support"
     / "MailMate"
     / "Database.noindex"
     / "Headers"
@@ -81,7 +81,7 @@ def tag_keywords() -> dict[str, str]:
     Each tag in Tags.plist has a displayName and an optional serverKeyword.
     When serverKeyword is absent, the IMAP keyword equals the displayName.
     """
-    tags_plist = Path.home() / "Library" / "ApplicationSupport" / "MailMate" / "Tags.plist"
+    tags_plist = Path.home() / "Library" / "Application Support" / "MailMate" / "Tags.plist"
     if not tags_plist.exists():
         return {}
     try:
